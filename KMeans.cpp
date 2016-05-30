@@ -1,16 +1,15 @@
 #include "KMeans.h"
 
 using namespace std;
+using namespace MPI;
 
-double fitTwoImages(MultidimArray<double> &fixed,MultidimArray<double> &I, double sigma, bool reverse)
+double fitTwoImages(MultidimArray<double> &fixed,MultidimArray<double> &I, double sigma, Matrix2D<double> &M, bool reverse)
 {
 	if (reverse)
     {
         I.selfReverseX();
         I.setXmippOrigin();
     }
-
-    Matrix2D<double> M;
 
     alignImages(fixed, I, M);
 
@@ -21,20 +20,25 @@ double fitTwoImages(MultidimArray<double> &fixed,MultidimArray<double> &I, doubl
     return corr;
 }
 
-double fit(MultidimArray<double> &fixed, MultidimArray<double> &I, double sigma)
+double fit(MultidimArray<double> &fixed, MultidimArray<double> &I, double sigma, Matrix2D<double> &M)
 {
 	MultidimArray<double> Idirect = I;
-	double corrd = fitTwoImages(fixed, Idirect, sigma);
+	Matrix2D<double> md;
+	double corrd = fitTwoImages(fixed, Idirect, sigma, md);
 
 	MultidimArray<double> Imirror=I;
-	double corri = fitTwoImages(fixed, Imirror, sigma, true);
+	Matrix2D<double> mi;
+	// double corri = fitTwoImages(fixed, Imirror, sigma, mi, true);
+	double corri=-100;
 
 	if(corrd > corri){
 		I=Idirect;
+		M=md;
 		return corrd;
 	}
 	else{
 		I=Imirror;
+		M=mi;
 		return corri;
 	}
 }
@@ -69,9 +73,12 @@ void printCenterInfo(KMeans &km, string name)
 
 //member functions of class Program
 
-Program::Program(string s)
-	:fin(s)
+Program::Program(string s, int k0, int kn)
+	:fin(s), K0(k0), KN(kn)
 {
+	time_t start,end;
+    start=time(NULL);
+
 	md.read(fin);
 
 	Nimgs = md.size();
@@ -96,6 +103,8 @@ Program::Program(string s)
 
     corrM.resize(Nimgs,Nimgs);
     for(int i=0; i<Nimgs; i++){
+    	if(i%numprocs!=id)
+    		continue;
         Image<double> img1;
         readImage(md, img1, i+1, false);
         for(int j=0; j<Nimgs; j++){
@@ -103,27 +112,36 @@ Program::Program(string s)
                 dAij(corrM, i, j)=1;
                 continue;
             }
-            if(j<i){
-                dAij(corrM, i, j) = dAij(corrM, j, i);
-                continue;
-            }
+            // if(j<i){
+            //     dAij(corrM, i, j) = dAij(corrM, j, i);
+            //     continue;
+            // }
             Image<double> img2;
             readImage(md, img2, j+1, false);
             dAij(corrM, i, j) = correntropy(img1.data, img2.data, sigma);
         }
     }
+
+    comm.Barrier();
+    for(int i=0; i<Nimgs; i++){
+    	int source = i%numprocs;
+    	comm.Bcast(&dAij(corrM, i, 0), corrM.xdim, MPI_DOUBLE, source);
+    	
+    }
     MultidimArray<double> tmp=corrM;
     RAIndex(tmp, corrM, 80, Cmp(false));
     CreateAdjacentMatrix(corrM, adjancent, 80, Cmp(false));
 
+    end=time(NULL);
+    cout<<"cost "<<difftime(end, start)<<" seconds"<<endl;
 }
 
 bool Program::run()
 {
-	KMeans km(3,30, fin, Nimgs, Xdim, Ydim, sigma);
+	KMeans km(K0,20, fin, Nimgs, Xdim, Ydim, sigma);
 	km.initialize(adjancent);
 	bool r=true;
-	km.runDivisive(4,adjancent);
+	km.runDivisive(KN,adjancent);
 	cout<<"run done"<<endl;
 	return r;
 }
@@ -212,18 +230,22 @@ bool KMeans::run(MultidimArray<double> &adjancent)
 					bestcluster=c;
 				}
 			}
-			fit(centers[bestcluster].thisP, I(), sigma);
+			Matrix2D<double> M;
+			fit(centers[bestcluster].thisP, I(), sigma, M);
 			centers[bestcluster].nextP+=I();
 			centers[bestcluster].newbelongings.push_back(i);
 			newclusters[i]=bestcluster;
 		}
+
 		for(int i=0; i<K; i++) centers[i].update(md, sigma, adjancent);
 		int changes=0;
 		for(int i=0; i<Nimgs; i++)
 			changes+=(oldclusters[i]==newclusters[i] ? 0 : 1);
-		cout<<"in iter "<<ite<<", changes "<<changes<<endl;
-		printCenterInfo(*this, name.removeLastExtension().getString());
-		cout<<endl;
+		if(id==0){
+			cout<<"in iter "<<ite<<", changes "<<changes<<endl;
+			printCenterInfo(*this, name.removeLastExtension().getString());
+			cout<<endl;
+		}
 
 		int largest=-1, largestsize=0, smallest=-1, smallsize=Nimgs+1;
 		for(int i=0; i<K; i++)
@@ -259,27 +281,76 @@ bool KMeans::run(MultidimArray<double> &adjancent)
 void KMeans::runDivisive(int finalN,MultidimArray<double> &adjancent)
 {
 	while(true){
+		time_t start, end;
+		start=time(NULL);
 		run(adjancent);
-		printCenterInfo(*this, name.removeLastExtension().getString());
+		end=time(NULL);
+		cout<<"One KMeans cost "<<difftime(end, start)<<" seconds"<<endl;
+		if (id==0) printCenterInfo(*this, name.removeLastExtension().getString());
 		if(K>=finalN)
 			break;
-		int largest=-1, largestsize=0;
-		for(int i=0; i<K; i++)
-		{
-			if(centers[i].belongings.size()>largestsize){
-				largestsize=centers[i].belongings.size();
-				largest=i;
+		int tosplit = min(K, finalN-K);
+		for(int j=0; j<tosplit; j++){
+			int largest=-1, largestsize=0;
+			for(int i=0; i<K; i++)
+			{
+				if(centers[i].belongings.size()>largestsize){
+					largestsize=centers[i].belongings.size();
+					largest=i;
+				}
+			}
+			Cluster c;
+			centers.push_back(c);centers.push_back(c);
+			splitCluster(centers[largest], centers[K], centers[K+1], adjancent);
+			centers.erase(centers.begin()+largest);
+			K++;
+			for(int i=0; i<K; i++){
+				for(int j=0; j<centers[i].belongings.size(); j++)
+					newclusters[centers[i].belongings[j]]=i;
 			}
 		}
-		Cluster c;
-		centers.push_back(c);centers.push_back(c);
-		splitCluster(centers[largest], centers[K], centers[K+1], adjancent);
-		centers.erase(centers.begin()+largest);
-		K++;
-		for(int i=0; i<K; i++){
-			for(int j=0; j<centers[i].belongings.size(); j++)
-				newclusters[centers[i].belongings[j]]=i;
+	}
+	writeResult();
+}
+
+void KMeans::writeResult()
+{
+	if(id!=0) return ;
+	printCenterInfo(*this, name.removeLastExtension().getString()+"final");
+	MetaData out;
+	FileName fn=name.removeLastExtension().getString()+"results.xmd";
+	FileName classname=name.removeLastExtension().getString()+"final_centers.stk";
+	for(int i=0; i<K; i++){
+		MDRow row;
+		FileName fnclass;
+		fnclass.compose(i+1, classname);
+		row.setValue(MDL_REF, i+1);
+		row.setValue(MDL_IMAGE, fnclass);
+		row.setValue(MDL_CLASS_COUNT, centers[i].belongings.size());
+		out.addRow(row);
+	}
+	out.write("classes@"+fn);
+
+	for(int i=0; i<K; i++){
+		MetaData oneclass;
+		vector<int> &bel=centers[i].belongings;
+		for(int j=0; j<bel.size(); j++){
+			MDRow tmp;
+			md.getRow(tmp, bel[j]+1);
+			Matrix2D<double> M;
+			Image<double> I;
+			readImage(md, I, bel[j]+1, false);
+			fit(centers[i].thisP, I(), sigma, M);
+			bool flip;
+			double shiftx, shifty, psi, scale;
+			transformationMatrix2Parameters2D(M, flip, scale, shiftx, shifty, psi);
+			tmp.setValue(MDL_FLIP, flip);
+            tmp.setValue(MDL_SHIFT_X, shiftx);
+            tmp.setValue(MDL_SHIFT_Y, shifty);
+            tmp.setValue(MDL_ANGLE_PSI, psi);
+            oneclass.addRow(tmp);
 		}
+		oneclass.write(formatString("class%06d_images@%s",i+1,fn.c_str()),MD_APPEND);
 	}
 }
 
@@ -294,9 +365,17 @@ void Cluster::update(MetaData &md, double sigma, MultidimArray<double> &adjancen
 
 	int n = md.size();
 	for(int i=0; i<n; i++){
+		if(i%numprocs!=id)
+			continue;
 		Image<double> I;
 		readImage(md, I, i+1, false);
-		corrV[i]=fit(thisP, I(), sigma);
+		Matrix2D<double> M;
+		corrV[i]=fit(thisP, I(), sigma, M);
+	}
+	comm.Barrier();
+	for(int i=0; i<n; i++){
+		int source = i%numprocs;
+		comm.Bcast(&corrV[i], 1, MPI_DOUBLE, source);
 	}
 	vector<double> tmp=corrV;
 	for(int i=0; i<n; i++)
@@ -311,24 +390,32 @@ double Cluster::computeNetSim(int index, MultidimArray<double> &adjancent)
 	CreateAdjacentMatrix(corrV, v, sn, Cmp(false));
 	double sim=0;
 	for(int i=0; i<v.size(); i++){
-		// sim+=v[i]*dAij(adjancent, index, i);
-		if(dAij(adjancent, index, i)*v[i]){
-			int km=0;
-			for(int k=0;k<adjancent.xdim; k++) 
-				km+=dAij(adjancent,i,k);
-			if(km) 
-				sim+=1.0/km;
-		}
+		sim+=v[i]*dAij(adjancent, index, i);
+		// if(dAij(adjancent, index, i)*v[i]){
+		// 	int km=0;
+		// 	for(int k=0;k<adjancent.xdim; k++) 
+		// 		km+=dAij(adjancent,i,k);
+		// 	if(km) 
+		// 		sim+=1.0/km;
+		// }
 	}
-	// sim/=(2*sn-sim);
+	sim/=(2*sn-sim);
 	return sim;
 }
 
 
 int main(int argc, char**argv)
 {
+	time_t start, end;
+	start=time(NULL);
+	Init(argc, argv);
+	id=comm.Get_rank();
+	numprocs=comm.Get_size();
 	cout<<"Input image: "<<argv[1]<<endl;
-	Program p(argv[1]);
+	Program p(argv[1], stoi(argv[2]), stoi(argv[3]));
 	p.run();
+	Finalize();
+	end=time(NULL);
+	cout<<"all process cost "<<difftime(end, start)<<" seconds"<<endl;
 	return 0;
 }

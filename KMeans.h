@@ -9,18 +9,23 @@
 #include <vector>
 #include <queue>
 #include <string>
+#include <time.h>
 
+#include "mpi.h"
 #include "NetSim.h"
 
-double fitTwoImages(MultidimArray<double> &fixed,MultidimArray<double> &I, double sigma, bool reverse=false);
+double fitTwoImages(MultidimArray<double> &fixed,MultidimArray<double> &I, double sigma, Matrix2D<double> &M, bool reverse=false);
 
-double fit(MultidimArray<double> &fixed, MultidimArray<double> &I, double sigma);
+double fit(MultidimArray<double> &fixed, MultidimArray<double> &I, double sigma, Matrix2D<double> &M);
 
 void readImage(MetaData &md, Image<double> &I, size_t objId, bool applyGeo);
 
+MPI::Comm &comm=MPI::COMM_WORLD;
+int id, numprocs;
 
 class Program{
 public:
+	int K0, KN;
 	int Nimgs;
 	FileName fin;
 	MetaData md;
@@ -29,7 +34,7 @@ public:
 	MultidimArray<double> corrM;
 	MultidimArray<double> adjancent;
 public:
-	Program(std::string s="");
+	Program(std::string s="", int k0=3, int kn=4);
 	bool run();
 };
 
@@ -64,6 +69,7 @@ public:
 	void splitCluster(Cluster &node, Cluster &node1, Cluster &node2, MultidimArray<double> &adjancent);
 	bool run(MultidimArray<double> &adjancent);
 	void runDivisive(int finalN,MultidimArray<double> &adjancent);
+	void writeResult();
 };
 
 void printCenterInfo(KMeans &km, std::string name);

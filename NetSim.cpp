@@ -13,7 +13,14 @@ void CreateAdjacentMatrix(MultidimArray<double> &SimIn, MultidimArray<double> &O
 		}
 		for(int j=0; j<k; j++){
 			dAij(Out, i, q.top().index)=1;
+			// dAij(Out, q.top().index, i)=1;
 			q.pop();
+		}
+	}
+	MultidimArray<double> tmp=Out;
+	for(int i=0; i<SimIn.ydim; i++){
+		for(int j=0; j<SimIn.xdim; j++){
+			dAij(Out, i, j) = dAij(tmp, i, j)*dAij(tmp, j, i);
 		}
 	}
 }
@@ -33,6 +40,7 @@ void CreateAdjacentMatrix(vector<double> &SimIn, vector<double> &Out, int k, con
 
 void SNN(MultidimArray<double> &SimIn, MultidimArray<double> &SimOut, int k, const Cmp cmp)
 {
+	SimOut.initZeros(SimIn);
 	MultidimArray<double> sharedNear(SimIn.ydim, SimIn.xdim);
 	CreateAdjacentMatrix(SimIn, sharedNear, k, cmp);
 
@@ -73,9 +81,9 @@ void JaccardIndex(MultidimArray<double> &SimIn, MultidimArray<double> &SimOut, i
 			double Union=0;
 			for(int m=0; m<adjacent.xdim; m++){
 				intersection+=dAij(adjacent, i, m)*dAij(adjacent, j, m);
-				Union+=dAij(adjacent, i, m)+dAij(adjacent, j, m);
+				Union+=max(dAij(adjacent, i, m), dAij(adjacent, j, m));
 			}
-			Union-=intersection;
+			// Union-=intersection;
 			dAij(SimOut, i, j) = intersection/Union;
 		}
 	}
@@ -83,6 +91,7 @@ void JaccardIndex(MultidimArray<double> &SimIn, MultidimArray<double> &SimOut, i
 
 void SorensenIndex(MultidimArray<double> &SimIn, MultidimArray<double> &SimOut, int k, const Cmp cmp)
 {
+	SimOut.initZeros(SimIn);
 	MultidimArray<double> adjacent(SimIn.ydim, SimIn.xdim);
 	CreateAdjacentMatrix(SimIn, adjacent, k, cmp);
 
@@ -100,15 +109,16 @@ void SorensenIndex(MultidimArray<double> &SimIn, MultidimArray<double> &SimOut, 
 			double den=0;
 			for(int m=0; m<adjacent.xdim; m++){
 				num+=dAij(adjacent, i, m)*dAij(adjacent, j, m);
-				den+=dAij(adjacent, i, m)+dAij(adjacent, j, m);
+				den+=max(dAij(adjacent, i, m), dAij(adjacent, j, m));
 			}
-			dAij(SimOut, i, j) = num/den;
+			dAij(SimOut, i, j) = 2*num/den;
 		}
 	}
 }
 
 void HDIndex(MultidimArray<double> &SimIn, MultidimArray<double> &SimOut, int k, const Cmp cmp)
 {
+	SimOut.initZeros(SimIn);
 	MultidimArray<double> adjacent(SimIn.ydim, SimIn.xdim);
 	CreateAdjacentMatrix(SimIn, adjacent, k, cmp);
 
@@ -136,6 +146,7 @@ void HDIndex(MultidimArray<double> &SimIn, MultidimArray<double> &SimOut, int k,
 
 void RAIndex(MultidimArray<double> &SimIn, MultidimArray<double> &SimOut, int k, const Cmp cmp)
 {
+	SimOut.initZeros(SimIn);
 	MultidimArray<double> adjacent(SimIn.ydim, SimIn.xdim);
 	CreateAdjacentMatrix(SimIn, adjacent, k, cmp);
 
@@ -165,6 +176,7 @@ void RAIndex(MultidimArray<double> &SimIn, MultidimArray<double> &SimOut, int k,
 
 void LPIndex(MultidimArray<double> &SimIn, MultidimArray<double> &SimOut, int k, const Cmp cmp, double eps)
 {
+	SimOut.initZeros(SimIn);
 	MultidimArray<double> adjacent(SimIn.ydim, SimIn.xdim);
 	CreateAdjacentMatrix(SimIn, adjacent, k, cmp);
 
@@ -178,11 +190,17 @@ void LPIndex(MultidimArray<double> &SimIn, MultidimArray<double> &SimOut, int k,
 
 void KatzIndex(MultidimArray<double> &SimIn, MultidimArray<double> &SimOut, int k, const Cmp cmp, double beta)
 {
+	SimOut.initZeros(SimIn);
 	MultidimArray<double> adjacent(SimIn.ydim, SimIn.xdim);
 	CreateAdjacentMatrix(SimIn, adjacent, k, cmp);
 
 	Matrix2D<double> A(adjacent.ydim, adjacent.xdim), I(adjacent.ydim, adjacent.xdim);
 	adjacent.getSliceAsMatrix(0, A);
+
+	Matrix2D<double> U,V;
+	Matrix1D<double> W;Matrix1D<int> index;
+	A.eigs(U,W,V,index);
+	beta=1/W(index(0))/2;
 
 	A=beta*A;
 	I.initIdentity();

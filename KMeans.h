@@ -6,6 +6,7 @@
 #include <data/numerical_tools.h>
 #include <data/xmipp_program.h>
 #include <data/filters.h>
+#include <reconstruction/fourier_filter.h>
 #include <vector>
 #include <queue>
 #include <string>
@@ -42,13 +43,15 @@ class Cluster{
 public:
 	MultidimArray<double> thisP;
 	MultidimArray<double> nextP;
+	MultidimArray<double> simM;
+	MultidimArray<double> netSimM;
 	std::vector<int> belongings;
 	std::vector<int> newbelongings;
 	std::vector<double> corrV;
 public:
 	Cluster(){};
-	void update(MetaData &md, double sigma, MultidimArray<double> &adjancent);
-	double computeNetSim(int index, MultidimArray<double> &corrM);
+	void update(MetaData &md, double sigma);
+	double getNetSim(int index);
 };
 
 class KMeans{
@@ -64,11 +67,11 @@ public:
 	std::vector<int> oldclusters, newclusters;
 public:
 	KMeans(int k, int it, FileName fn, int n, int xdim, int yidm, double s):K(k), iter(it), name(fn), Nimgs(n), Xdim(xdim), Ydim(yidm), sigma(s){md.read(name);}
-	void initialize(MultidimArray<double> &adjancent);
-	void createCluster(Cluster &c);
-	void splitCluster(Cluster &node, Cluster &node1, Cluster &node2, MultidimArray<double> &adjancent);
-	bool run(MultidimArray<double> &adjancent);
-	void runDivisive(int finalN,MultidimArray<double> &adjancent);
+	void initialize(MultidimArray<double> &corrM);
+	void createCluster(Cluster &c, MultidimArray<double> &corrM);
+	void splitCluster(Cluster &node, Cluster &node1, Cluster &node2, MultidimArray<double> &corrM);
+	bool run(MultidimArray<double> &corrM);
+	void runDivisive(int finalN,MultidimArray<double> &corrM);
 	void writeResult();
 };
 

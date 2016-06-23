@@ -94,12 +94,50 @@ our program(**jaccard**):
 
 |           |  real Class 1 |  real Class 2 | real Class 3 | real Class 4 | real class 5 | real class 6 |
 |-----------| ------- | ------- | ------- | ------- | ------- | ------- |
-|**class 1**|    100    |    0    |    0    |    0    |   0   |    0    |
-|**class 2**|    0    |    95    |    0    |    0    |   0   |    0    |
-|**class 3**|    0    |    0    |    0    |    0    |   0   |    80    |
-|**class 4**|    0    |    5    |    0    |    0    |   58   |    0    |
-|**class 5**|    0    |    0    |    0    |    1    |   42   |    0    |
-|**class 6**|    0    |    0    |    100    |    99    |   0   |    20    |
+|**class 1**|    100    |    0    |    0    |    58    |   0   |    20    |
+|**class 2**|    0    |    0    |    0    |    0    |   0   |    80    |
+|**class 3**|    0    |    1    |    0    |    0    |   100   |    0    |
+|**class 4**|    0    |    99    |    0    |    0    |   0   |    0    |
+|**class 5**|    0    |    0    |    0    |    42    |   0   |    0    |
+|**class 6**|    0    |    0    |    100    |    0    |   0   |    0    |
 
-it seems that real class5 have 2 classes. so, we look into the class 5, we really find 2 different images:
+we also find that real class5 have 2 classes. so, we look into the class 5, we really find 2 different images:
 ![8.png](Images/github/8.png)
+
+so, we redo this with final clusters equal 7 and we have(using **RA Index**):
+![9.png](Images/github/9.png)
+
+|           |  real Class 1 |  real Class 2 | real Class 3 | real Class 4 | real class 5 | real class 6 |
+|-----------| ------- | ------- | ------- | ------- | ------- | ------- |
+|**class 1**|    0    |    0    |    100    |    0    |   0   |    0    |
+|**class 2**|    0    |    0    |    0    |    0    |   0   |    80    |
+|**class 3**|    100    |    0    |    0    |    0    |   0   |    0    |
+|**class 4**|    0    |    1    |    0    |    0    |   69   |    0    |
+|**class 5**|    0    |    99    |    0    |    0    |   0   |    0    |
+|**class 6**|    0    |    0    |    0    |    0    |   31   |    0    |
+|**class 7**|    0    |    0    |    0    |    100    |   0   |    20    |
+
+####SNR=1/30
+CL2D(nref0=4, ref=6, correntropy, robust):
+![10.png](Images/github/10.png)
+
+|           |  real Class 1 |  real Class 2 | real Class 3 | real Class 4 | real class 5 | real class 6 |
+|-----------| ------- | ------- | ------- | ------- | ------- | ------- |
+|**class 1**|    33    |    38    |    21    |    4    |   0   |    19    |
+|**class 2**|    20    |    23    |    17    |    7    |   6   |    22    |
+|**class 3**|    30    |    25    |    52    |    25    |   13   |    32    |
+|**class 4**|    11    |    6    |    4    |    5    |   2   |    11    |
+|**class 5**|    1    |    0    |    0    |    5    |   15   |    0    |
+|**class 6**|    4    |    8    |    6    |    9    |   3   |    15    |
+
+our program:
+![11.png](Images/github/11.png)
+
+|           |  real Class 1 |  real Class 2 | real Class 3 | real Class 4 | real class 5 | real class 6 |
+|-----------| ------- | ------- | ------- | ------- | ------- | ------- |
+|**class 1**|    87    |    97    |    27    |    0    |   0   |    0    |
+|**class 2**|    0    |    0    |    9    |    17    |   0   |    23    |
+|**class 3**|    0    |    0    |    8    |    4    |   0   |    23    |
+|**class 4**|    0    |    0    |    7    |    18    |   0   |    17    |
+|**class 5**|    2    |    0    |    4    |    19    |   90   |    5    |
+|**class 6**|    11    |    3    |    45    |    42    |   10   |    14    |
